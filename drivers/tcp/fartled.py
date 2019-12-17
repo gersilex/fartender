@@ -1,14 +1,27 @@
 import socket
 
-
 CELL_SCALE = 2
 
 
 class FartLedTcpDriver:
+    ip = None
+    port = None
     sock = None
 
     def init(self, ip, port):
-        self.sock = socket.create_connection((ip, port))
+        self.ip = ip
+        self.port = port
+        try:
+            self.connect()
+        except ConnectionError as e:
+            print(
+                "Error: Could not connect to TCP socket %s:%s : %s"
+                % (ip, port, e)
+            )
+            raise
+
+    def connect(self):
+        self.sock = socket.create_connection((self.ip, self.port))
         print("Connected to %s:%d" % self.sock.getpeername())
 
     def toStream(self, matrix):
@@ -19,4 +32,9 @@ class FartLedTcpDriver:
 
     def flush(self, matrix):
         bytestream = bytes([CELL_SCALE, 8 * 8] + list(self.toStream(matrix)))
-        self.sock.send(bytestream)
+        try:
+            self.sock.send(bytestream)
+        except ConnectionResetError as e:
+            print(e)
+            self.connect()
+            self.flush(matrix)  # Recurse

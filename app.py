@@ -2,7 +2,7 @@
 
 import colour
 import math
-import time
+import os
 
 from flask import Flask, request
 
@@ -12,10 +12,13 @@ display = drivers.tcp.fartled.FartLedTcpDriver()
 matrix_width = 8
 matrix_height = 8
 
-matrix = [colour.Color('#002000') for _ in range(matrix_width * 8)]
+matrix = [colour.Color("#002000") for _ in range(matrix_width * 8)]
 app = Flask(__name__)
 
-display.init('172.17.35.216', 41)
+display.init(
+    os.environ.get("DISPLAY_HOST", "127.0.0.1"),
+    os.environ.get("DISPLAY_PORT", 41),
+)
 display.flush(matrix)
 
 
@@ -50,6 +53,7 @@ def flush_display(response):
     display.flush(matrix)
     return response
 
+
 # @app.route('/color/<int:row>/<int:column>', methods=['POST'])
 # def set_color(row: int, column: int):
 #     """Set a single Cell to a Color"""
@@ -64,29 +68,34 @@ def flush_display(response):
 #     return '', 204  # Successful, no content
 
 
-def set_color_by_index(index: int, color: colour.Color):
-    descrambled_index = SerpentineTranslator.translate_to_position(*LinearTranslator.translate_to_position(index))
-    print("Index: %d \tDescrambled Index: %d" % (index, descrambled_index))
-    print("Set index %d to %s" % (index, color))
+def set_color_by_natural_index(index: int, color: colour.Color):
+    # if color == colour.Color("#00ff00"):
+    #     color = colour.Color("#00a000")
+
+    descrambled_index = SerpentineTranslator.translate_to_position(
+        *LinearTranslator.translate_to_position(index)
+    )
     matrix[descrambled_index] = color
 
 
-@app.route('/colors', methods=['POST'])
+@app.route("/colors", methods=["POST"])
 def set_colors():
-    colors = request.json
-    print(colors)
+    colors = request.json["colors"]
+
+    if len(colors) > len(matrix):
+        return (
+            "Payload Too Large: Your array length of {} elements exceeds the maximum length of {} elements!".format(
+                len(colors), len(matrix)
+            ),
+            413,
+        )  # Payload too large
 
     for i, color in enumerate(colors):
-        set_color_by_index(i, colour.Color(color))
+        set_color_by_natural_index(i, colour.Color(color))
 
     display.flush(matrix)
-    return '', 204
+    return "", 204
 
 
-if __name__ == '__main__':
-    # while True:
-    #     for i in range(matrix_height * matrix_width):
-    #         set_color_by_index(i, colour.Color("blue"))
-    #     for i in range(matrix_height * matrix_width):
-    #         set_color_by_index(i, colour.Color("black"))
+if __name__ == "__main__":
     app.run(host="0.0.0.0", debug=True)
